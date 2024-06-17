@@ -1,0 +1,166 @@
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
+from tqdm import tqdm
+from utils import set_seed, visualize_data, normalize_data
+
+
+class Discriminator(nn.Module):
+    def __init__(self, input_dim, hidden_dim,block_num=4):
+        super(Discriminator, self).__init__()
+        self.feature = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.LeakyReLU(),
+            *([
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.LeakyReLU()
+            ]*block_num)
+        )
+        self.logits = nn.Linear(hidden_dim, 1)
+
+    def forward(self, x):
+        hidden = self.feature(x)
+        logits = torch.sigmoid(self.logits(hidden))
+        return logits
+
+
+class Generator(nn.Module):
+    def __init__(self, z_dim, hidden_dim, output_dim,block_num=4):
+        super(Generator, self).__init__()
+        self.feature = nn.Sequential(
+            nn.Linear(z_dim, hidden_dim),
+            nn.LeakyReLU(),
+            *([
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.LeakyReLU()
+            ]*block_num)
+        )
+        self.out = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, z):
+        hidden = self.feature(z)
+        predicted = self.out(hidden)
+        return predicted
+
+
+def train(generator,discriminator, data_loader, epochs=100):
+    
+    
+    adversarial_loss = torch.nn.BCELoss()
+
+    optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr)
+    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr)
+    
+    scheduler_G = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_G, T_max=epochs)
+    scheduler_D = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_D, T_max=epochs)
+    
+    generator.train()
+    discriminator.train()
+    for epoch in range(epochs):
+        par = tqdm(data_loader, ncols=100)
+        for x in par:
+            x = x[0]
+            valid = torch.ones(x.shape[0], 1).to(device)
+            fake = torch.zeros(x.shape[0], 1).to(device)
+            
+            for _ in range(2):
+                optimizer_G.zero_grad()
+                z = torch.randn((x.shape[0], z_dim)).to(device)
+                gen=generator(z)
+                g_loss = adversarial_loss(discriminator(gen), valid)
+                g_loss.backward()
+                optimizer_G.step()
+                scheduler_G.step()
+            
+            
+            z = torch.randn((x.shape[0], z_dim)).to(device)
+            optimizer_D.zero_grad()
+            gen=generator(z).detach()
+            real_loss = adversarial_loss(discriminator(x), valid)
+            fake_loss = adversarial_loss(discriminator(gen), fake)
+            d_loss = (real_loss + fake_loss) / 2
+            d_loss.backward()
+            optimizer_D.step()
+            scheduler_D.step()
+            
+            par.set_description(
+                f"Epoch[{epoch + 1}/{epochs}], G-Loss: {g_loss.item()}, D-Loss: {d_loss.item()}")
+        
+        if epoch % 20 == 0:
+            visualize_data(gen.cpu().detach().numpy(), f'./tmp/gan_generated.png')
+            save_model(generator, './ckpt/gan-generator.pth')
+            save_model(discriminator, './ckpt/gan-discriminator.pth')
+
+
+# def validate(vae, data_loader):
+#     vae.eval()
+#     loss = 0
+#     with torch.no_grad():
+#         for x in data_loader:
+#             x = x[0]
+#             recon_x, mu, log_var = vae(x)
+#             visualize_data(x.cpu().numpy(), './x.png')
+#             visualize_data(recon_x.cpu().numpy(), './x_recon.png')
+#             visualize_data(mu.cpu().numpy(), './z.png')
+#             loss += loss_function(recon_x, x, mu, log_var)
+#             break
+#     return loss
+
+
+def generate(generator, num=1800):
+    generator.eval()
+    with torch.no_grad():
+        z = torch.randn(num, z_dim).to(device)
+        generated = generator(z).cpu().numpy()
+    visualize_data(generated, './ckpt/gan_generated.png')
+    return generated
+
+
+def save_model(vae, path):
+    torch.save(vae.state_dict(), path)
+
+
+def load_model(vae, path):
+    vae.load_state_dict(torch.load(path))
+    return vae
+
+
+def main(is_train=False):
+
+    generator=Generator(z_dim,hidden_dim,input_dim).to(device)
+    discriminator=Discriminator(input_dim,hidden_dim).to(device)
+
+    if not is_train:
+        generator = load_model(generator, './ckpt/gan-generator.pth').to(device)
+        discriminator = load_model(discriminator, './ckpt/gan-discriminator.pth').to(device)
+    
+    train_data = torch.from_numpy(
+        np.load('./data/train.npy')).to(device=device, dtype=torch.float32)
+    train_dataset = TensorDataset(train_data)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True)
+    test_data = torch.from_numpy(
+        np.load('./data/test.npy')).to(device=device, dtype=torch.float32)
+    test_dataset = TensorDataset(test_data)
+    test_loader = DataLoader(test_dataset, batch_size=1500, shuffle=False)
+    if is_train:
+        train(generator,discriminator, train_loader,
+              epochs=epochs)
+
+    save_model(generator, './ckpt/gan-generator.pth')
+    save_model(discriminator, './ckpt/gan-discriminator.pth')
+    # validate(vae, test_loader)
+    generate(generator)
+
+
+set_seed(0)
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+batch_size = 1500
+lr = 3e-4
+input_dim = 2
+hidden_dim = 1024
+z_dim = 2
+epochs = 30000
+main(is_train=True)
