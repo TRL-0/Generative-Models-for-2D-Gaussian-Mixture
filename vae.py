@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 from tqdm import tqdm
-from utils import set_seed, visualize_data,compute_kl_divergence_2d,compute_fid
+from utils import set_seed, visualize_data, compute_kl_divergence_2d, compute_fid
 
 
 class Encoder(nn.Module):
@@ -123,7 +123,8 @@ def generate(vae, num=15000):
     with torch.no_grad():
         z = torch.randn(num, cfg.z_dim).to(device)
         generated = vae.decoder(z)
-    visualize_data(generated[:1800].cpu().numpy(), './results/vae_generated.png')
+    visualize_data(generated[:1800].cpu().numpy(),
+                   './results/vae_generated.png')
     return generated.cpu()
 
 
@@ -171,27 +172,26 @@ def main():
     val_loss = validate(vae, val_loader)
     test_loss = validate(vae, test_loader)
     print(f"Train: {train_loss}, Val: {val_loss}, Test: {test_loss}")
-    
+
     generated = generate(vae).cpu().numpy()
     # FID
-    fid_train=compute_fid(generated, train_data.cpu().numpy())
-    fid_val=compute_fid(generated, val_data.cpu().numpy())
-    fid_test=compute_fid(generated, test_data.cpu().numpy())
+    fid_train = compute_fid(generated, train_data.cpu().numpy())
+    fid_val = compute_fid(generated, val_data.cpu().numpy())
+    fid_test = compute_fid(generated, test_data.cpu().numpy())
     print(f"Train: {fid_train}, Val: {fid_val}, Test: {fid_test}")
-    
+
     # KL divergence
     kl_train = compute_kl_divergence_2d(generated, train_data.cpu().numpy())
     kl_val = compute_kl_divergence_2d(generated, val_data.cpu().numpy())
     kl_test = compute_kl_divergence_2d(generated, test_data.cpu().numpy())
     print(f"Train: {kl_train}, Val: {kl_val}, Test: {kl_test}")
-    
-    
-    
+
     with open('./results/vae.txt', 'w') as f:
-        f.write(f"Reconstrution loss: Train: {train_loss}, Val: {val_loss}, Test: {test_loss}\n")
+        f.write(
+            f"Reconstrution loss: Train: {train_loss}, Val: {val_loss}, Test: {test_loss}\n")
         f.write(f"FID: Train: {fid_train}, Val: {fid_val}, Test: {fid_test}\n")
-        f.write(f"KL Divergence: Train: {kl_train}, Val: {kl_val}, Test: {kl_test}")
-    
+        f.write(
+            f"KL Divergence: Train: {kl_train}, Val: {kl_val}, Test: {kl_test}")
 
 
 if __name__ == '__main__':
