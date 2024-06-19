@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 from tqdm import tqdm
-from utils import set_seed, visualize_data, compute_kl_divergence_2d,compute_fid
+from utils import set_seed, visualize_data, compute_kl_divergence_2d, compute_fid
 
 
 class Discriminator(nn.Module):
@@ -100,7 +100,8 @@ def generate(generator, num=1800):
     with torch.no_grad():
         z = torch.randn(num, cfg.z_dim).to(device)
         generated = generator(z)
-    visualize_data(generated[:1800].cpu().numpy(), './results/gan_generated.png')
+    visualize_data(generated[:1800].cpu().numpy(),
+                   './results/gan_generated.png')
     return generated.cpu()
 
 
@@ -149,24 +150,24 @@ def main():
 
     save_model(generator, './ckpt/gan-generator.pth')
     save_model(discriminator, './ckpt/gan-discriminator.pth')
-    
-    
+
     generated = generate(generator).cpu().numpy()
     # FID
-    fid_train=compute_fid(generated, train_data.cpu().numpy())
-    fid_val=compute_fid(generated, val_data.cpu().numpy())
-    fid_test=compute_fid(generated, test_data.cpu().numpy())
+    fid_train = compute_fid(generated, train_data.cpu().numpy())
+    fid_val = compute_fid(generated, val_data.cpu().numpy())
+    fid_test = compute_fid(generated, test_data.cpu().numpy())
     print(f"Train: {fid_train}, Val: {fid_val}, Test: {fid_test}")
-    
+
     # KL divergence
     kl_train = compute_kl_divergence_2d(generated, train_data.cpu().numpy())
     kl_val = compute_kl_divergence_2d(generated, val_data.cpu().numpy())
     kl_test = compute_kl_divergence_2d(generated, test_data.cpu().numpy())
     print(f"Train: {kl_train}, Val: {kl_val}, Test: {kl_test}")
-    
+
     with open('./results/gan.txt', 'w') as f:
         f.write(f"FID: Train: {fid_train}, Val: {fid_val}, Test: {fid_test}\n")
-        f.write(f"KL Divergence: Train: {kl_train}, Val: {kl_val}, Test: {kl_test}")
+        f.write(
+            f"KL Divergence: Train: {kl_train}, Val: {kl_val}, Test: {kl_test}")
 
 
 if __name__ == '__main__':
