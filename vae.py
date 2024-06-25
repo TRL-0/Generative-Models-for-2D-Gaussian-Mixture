@@ -79,7 +79,7 @@ def loss_function(recon_x, x, mu, log_var, beta=1.0):
 
 
 def train(vae, data_loader, epochs=100):
-    optimizer = torch.optim.AdamW(vae.parameters(), lr=cfg.lr)
+    optimizer = torch.optim.Adam(vae.parameters(), lr=cfg.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=epochs)
     vae.train()
